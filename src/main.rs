@@ -1,4 +1,4 @@
-use std::{collections::HashSet, error};
+use std::{collections::HashSet, error, time::Duration};
 
 use clap::{App, Arg};
 use curl::easy::Easy;
@@ -75,6 +75,7 @@ fn get_html(url: &Url) -> Result<String, Box<error::Error>> {
     let mut easy = Easy::new();
     easy.url(url.as_str())?;
     easy.follow_location(true)?;
+    easy.timeout(Duration::new(2, 0))?;
 
     let mut transfer = easy.transfer();
     transfer.write_function(|data| {

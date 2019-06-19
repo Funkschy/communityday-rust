@@ -20,10 +20,18 @@ impl LinkFinder {
             Ok(url) => Some(url),
             Err(ParseError::RelativeUrlWithoutBase) => {
                 let base = Url::parse(&self.base).ok()?;
-                base.join(url).ok()
+                if !Self::is_loop(&base, &**url) {
+                    base.join(url).ok()
+                } else {
+                    None
+                }
             }
             Err(_) => None,
         }
+    }
+
+    fn is_loop(base: &Url, link: &str) -> bool {
+        return base.path().contains(link);
     }
 
     fn push_href(&mut self, attrs: Vec<Attribute>) {

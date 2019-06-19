@@ -1,0 +1,12 @@
+[package]
+name = "webcrawler"
+version = "0.1.0"
+authors = ["Felix Schoeller <felixschoeller@outlook.de>"]
+edition = "2018"
+description = "A simple mutlithreaded webcrawler"
+
+[dependencies]
+html5ever = "0.23.0"
+url = "1.7.2"
+curl = "0.4.22"
+clap = "2.33.0"

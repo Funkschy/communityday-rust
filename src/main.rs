@@ -1,81 +1,67 @@
-use std::{collections::HashSet, error, time::Duration};
+use std::{collections::HashSet, error, sync::mpsc, time::Duration};
 
-use clap::{App, Arg};
 use curl::easy::Easy;
+use threadpool::ThreadPool;
 use url::Url;
 
+mod cli;
 mod html;
-mod thread;
 use html::LinkFinder;
 
-pub const NAME: &str = env!("CARGO_PKG_NAME");
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-pub const AUTHOR: &str = env!("CARGO_PKG_AUTHORS");
-pub const ABOUT: &str = env!("CARGO_PKG_DESCRIPTION");
+pub const MAX_REDIRECT: u32 = 2;
+pub const TIMEOUT_SEC: u64 = 2;
 
 fn main() -> Result<(), Box<error::Error>> {
-    let url = get_url_from_command_line()?;
+    let n_workers = 16;
+    let (visited_in, visited_out) = mpsc::channel();
+    let pool = ThreadPool::new(n_workers);
 
-    let mut child_urls = visit(url)?;
+    visited_in.send(cli::get_url_from_command_line()?)?;
     let mut visited = HashSet::new();
 
-    while !child_urls.is_empty() {
-        let child = child_urls.pop().unwrap();
-        if visited.contains(&child) {
+    for url in visited_out {
+        if visited.contains(&url) {
             continue;
         }
-        println!("{}", &child);
 
-        visited.insert(child.clone());
-        child_urls.append(&mut visit(child)?);
+        visited.insert(url.clone());
+        println!("Visited {}", &url);
+
+        let visited_in = visited_in.clone();
+        pool.execute(move || {
+            if let Ok(urls) = visit(url) {
+                for url in urls {
+                    visited_in.send(url.clone()).unwrap();
+                }
+            }
+        });
     }
 
     Ok(())
 }
 
-fn get_url_from_command_line() -> Result<Url, url::ParseError> {
-    let matches = App::new(NAME)
-        .version(VERSION)
-        .author(AUTHOR)
-        .about(ABOUT)
-        .arg(
-            Arg::with_name("url")
-                .short("u")
-                .long("url")
-                .value_name("URL")
-                .help("The starting URL")
-                .takes_value(true)
-                .required(true),
-        )
-        .get_matches();
-
-    Url::parse(matches.value_of("url").unwrap())
-}
-
+/// Besucht eine Url, laedt den HTML code herunter und extrahiert alle Links aus diesem
 fn visit(url: Url) -> Result<Vec<Url>, Box<error::Error>> {
-    let html = get_html(&url);
-    if html.is_err() {
-        println!("{} Has malformed html", url);
+    let html = download_html(&url);
+    if let Err(err) = html {
+        println!("Error: {}", err);
         return Ok(Vec::new());
     } else if !["http", "https", "file"].contains(&url.scheme()) {
-        println!("Could not download {}", url);
+        println!("{} ist not supported", url.scheme());
         return Ok(Vec::new());
     }
 
-    let lf = LinkFinder::get_links(url.into_string(), &html?);
-    Ok(lf
-        .link_strings
-        .iter()
-        .filter_map(|url| lf.get_url(*url))
-        .collect())
+    let lf = LinkFinder::get_links(url.into_string(), &html.unwrap());
+    Ok(lf.collect_links())
 }
 
-fn get_html(url: &Url) -> Result<String, Box<error::Error>> {
+fn download_html(url: &Url) -> Result<String, Box<error::Error>> {
     let mut dst = Vec::new();
     let mut easy = Easy::new();
     easy.url(url.as_str())?;
-    easy.follow_location(true)?;
-    easy.timeout(Duration::new(2, 0))?;
+    easy.follow_location(MAX_REDIRECT > 0)?;
+    easy.timeout(Duration::new(TIMEOUT_SEC, 0))?;
+    easy.max_redirections(MAX_REDIRECT)?;
 
     let mut transfer = easy.transfer();
     transfer.write_function(|data| {

@@ -20,6 +20,7 @@ impl LinkFinder {
             Ok(url) => Some(url),
             Err(ParseError::RelativeUrlWithoutBase) => {
                 let base = Url::parse(&self.base).ok()?;
+
                 if !Self::is_loop(&base, &**url) {
                     base.join(url).ok()
                 } else {
@@ -30,8 +31,19 @@ impl LinkFinder {
         }
     }
 
+    pub fn collect_links(&self) -> Vec<Url> {
+        self.link_strings
+            .iter()
+            .filter_map(|link| {
+                let mut url = self.get_url(*link)?;
+                url.set_query(None);
+                Some(url)
+            })
+            .collect()
+    }
+
     fn is_loop(base: &Url, link: &str) -> bool {
-        return base.path().contains(link);
+        base.path().contains(link)
     }
 
     fn push_href(&mut self, attrs: Vec<Attribute>) {
@@ -57,10 +69,7 @@ impl LinkFinder {
             tokenizer.sink
         };
 
-        link_finder.link_strings = (0_usize..link_finder.links.len())
-            .into_iter()
-            .map(|i| LinkStr(i))
-            .collect();
+        link_finder.link_strings = (0..link_finder.links.len()).map(LinkStr).collect();
 
         link_finder.base = base;
         link_finder

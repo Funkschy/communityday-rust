@@ -102,3 +102,28 @@ impl TokenSink for LinkFinder {
         TokenSinkResult::Continue
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fetch_links() {
+        let html = r#"
+            <html>
+            <body>
+                <a href="http://test.com"/>
+                <a href="http://provinzial.com"/>
+            </body>
+            </html>"#;
+
+        let links = LinkFinder::get_links("".to_owned(), html).collect_links();
+        assert_eq!(
+            vec![
+                Url::parse("http://test.com").unwrap(),
+                Url::parse("http://provinzial.com").unwrap()
+            ],
+            links
+        );
+    }
+}

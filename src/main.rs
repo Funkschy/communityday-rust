@@ -21,7 +21,7 @@ pub const TIMEOUT_SEC: u64 = 2;
 fn main() -> Result<(), Box<error::Error>> {
     // da viele Threads blockieren, per default die doppelte Anzahl der
     // verfuegbaren Kerne nutzen
-    let n_workers = num_cpus::get() * 2;
+    let n_workers = num_cpus::get() * 4;
     let (visited_in, visited_out) = mpsc::channel();
     let pool = ThreadPool::new(n_workers);
 
